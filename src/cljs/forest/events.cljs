@@ -35,17 +35,24 @@
        (assoc :model (graphics/make-model height-map))
        join-model-shader)))
 
-(defn add-angle [x diff]
-  (+ x (/ diff 50.0)))
 
 (re-frame/reg-event-db
  :mouse-move
- (fn [{{camera :camera} :graphics :as db} [_ [x y]]]
-   (assoc-in db [:graphics :camera]
-             (-> camera
-                 (update :pitch add-angle x)
-                 (update :yaw add-angle y)
-                 graphics/update-view))))
+ (fn [db [_ [x y]]]
+   (update-in db [:graphics :camera]
+              graphics/update-view
+              [0 0 0] (/ x 50) (/ y 50))))
+
+(re-frame/reg-event-db
+ :key-pressed
+ (fn [db [_ key-code]]
+   (let [offsets {\w [0 0 1]
+                  \s [0 0 -1]
+                  \a [-1 0 0]
+                  \d [1 0 0]}]
+     (update-in db [:graphics :camera]
+                graphics/update-view
+                (offsets key-code [0 0 0]) 0 0))))
 
 (re-frame/reg-event-fx
  ::draw!
@@ -58,4 +65,4 @@
 (defn dispatch-timer-event []
   (let [now (js/Date.)]
     (re-frame/dispatch [::draw! now])))
-(defonce do-timer (js/setInterval dispatch-timer-event 200))
+(defonce do-timer (js/setInterval dispatch-timer-event (/ 1000 60)))

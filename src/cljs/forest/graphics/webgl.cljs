@@ -21,22 +21,29 @@
      :canvas canvas
      :camera (cam/perspective-camera {:far 2000
                                       :near 0.1
-                                      :yaw 0
-                                      :pitch 0
                                       :eye (vec3 0.0, 200.0, -1501.0)
                                       :target (vec3 0.0, 200.0, -1500.0)})
      :shaders (make-shaders gl-ctx)}))
 
 (defn update-view
-  [{:keys [pitch yaw view target eye up] :as camera}]
-  (if (and (= 0 yaw) (= 0 pitch))
-    camera
+  "Update the camera by moving it along the given translation vector or rotating it by `pitch` or `yaw`."
+  [{:keys [target eye] :as camera} translate pitch yaw]
+  (cond
+    (not-every? #{0} [pitch yaw])
     (let [rotation (q/quat-from-euler :xyz yaw pitch 0)
           target (geom/transform-vector rotation target)]
-      (-> camera
-          (cam/set-view {:eye eye :target target})
-          (assoc :yaw 0)
-          (assoc :pitch 0)))))
+      (cam/set-view camera {:target target}))
+
+    ; This doesn't really work. The idea is to get the current camera rotation, turn the
+    ; translation vector (which is a unit one) by the rotation, then add it to both
+    ; the `eye` and `target` vectors so as to move them in whatever direction. I'm
+    ; guessing my maths is off...
+    (not-every? #{0} translate)
+    (let [rot (m/normalize (q/quat (:xyz target) (m/mag target)))
+          translation (geom/transform-vector rot translate)]
+      (cam/set-view camera {:target (m/+ translation target) :eye (m/+ translation eye)}))
+
+    :else camera))
 
 (defn points-2d-vertices [points]
   (for [m (range (dec (count points)))
@@ -45,7 +52,6 @@
      [(inc n) m]
      [(inc n) (inc m)]
      [n (inc m)]]))
-
 
 (defn height-point [heights points-per-meter [x y]]
   (let [h-width (/ (count (first height-map)) 2)
