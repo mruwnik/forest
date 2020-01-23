@@ -8,11 +8,11 @@
 
 (defn join-model-shader
   "Make sure that all shaders have proper defaults on the basis of the current models."
-  [{model :model {shaders :shaders} :graphics :as db}]
-  (let [height-shader-applier (or (-> shaders :height :apply-model) first)]
-    (-> db
-        (update-in [:graphics :shaders :height] height-shader-applier model))))
-
+  [{model :model {:keys [shaders gl-ctx]} :graphics :as db}]
+  (->> shaders
+       :height
+       (graphics/combine-model-shader gl-ctx model)
+       (assoc-in db [:graphics :state])))
 
 (re-frame/reg-event-db
  ::initialize-db
@@ -35,16 +35,27 @@
        (assoc :model (graphics/make-model height-map))
        join-model-shader)))
 
+(defn add-angle [x diff]
+  (+ x (/ diff 50.0)))
+
+(re-frame/reg-event-db
+ :mouse-move
+ (fn [{{camera :camera} :graphics :as db} [_ [x y]]]
+   (assoc-in db [:graphics :camera]
+             (-> camera
+                 (update :pitch add-angle x)
+                 (update :yaw add-angle y)
+                 graphics/update-view))))
 
 (re-frame/reg-event-fx
  ::draw!
- (fn [{{{:keys [gl-ctx camera shaders]} :graphics model :model} :db} [_ a]]
-   (graphics/draw-frame! gl-ctx camera (:height shaders) model)
-   {:draw! nil}))
+ (fn [{{{:keys [gl-ctx camera state]} :graphics} :db} [_ a]]
+   (graphics/draw-frame! gl-ctx camera state)
+   nil))
 
 
 ;; Redraw the scene every second
 (defn dispatch-timer-event []
   (let [now (js/Date.)]
     (re-frame/dispatch [::draw! now])))
-(defonce do-timer (js/setInterval dispatch-timer-event 1000))
+(defonce do-timer (js/setInterval dispatch-timer-event 200))
