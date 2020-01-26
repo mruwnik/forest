@@ -3,39 +3,14 @@
    [re-frame.core :as re-frame]
    [forest.db :as db]
    [forest.graphics.webgl :as graphics]
-   [forest.graphics.geography :refer [height-map]]
    ))
-
-(defn join-model-shader
-  "Make sure that all shaders have proper defaults on the basis of the current models."
-  [{model :model {:keys [shaders gl-ctx]} :graphics :as db}]
-  (->> shaders
-       :height
-       (graphics/combine-model-shader gl-ctx model)
-       (assoc-in db [:graphics :state])))
 
 (re-frame/reg-event-db
  ::initialize-db
  (fn [_ _]
    db/default-db))
 
-(re-frame/reg-event-fx
- :canvas-loaded
- (fn [{:keys [db]} [_ canvas]]
-   (when canvas
-     {:db (-> db
-              (assoc :graphics (graphics/gl-context canvas))
-              join-model-shader)
-      :dispatch [::draw! nil]})))
-
-(re-frame/reg-event-db
- ::load-model
- (fn [db [_ model]]
-   (-> db
-       (assoc :model (graphics/make-model height-map))
-       join-model-shader)))
-
-
+;; Input handlers
 (re-frame/reg-event-db
  :mouse-move
  (fn [db [_ [x y]]]
@@ -54,15 +29,56 @@
                 graphics/update-view
                 (offsets key-code [0 0 0]) 0 0))))
 
+
+;; Drawing
 (re-frame/reg-event-fx
  ::draw!
- (fn [{{{:keys [gl-ctx camera state]} :graphics} :db} [_ a]]
-   (graphics/draw-frame! gl-ctx camera state)
+ (fn [{{{:keys [gl-ctx state camera]} :graphics} :db} [_ a]]
+   (when state
+     (graphics/draw-frame! gl-ctx camera state))
    nil))
 
-
-;; Redraw the scene every second
+ ;; Redraw the scene every second
 (defn dispatch-timer-event []
   (let [now (js/Date.)]
     (re-frame/dispatch [::draw! now])))
 (defonce do-timer (js/setInterval dispatch-timer-event (/ 1000 60)))
+
+
+;; Model handlers
+(re-frame/reg-event-db
+ ::setup-graphics
+ (fn [db [_ [canvas map-data]]]
+  (if-not (and map-data canvas)
+    db ;; if map-data or canvas are not set, there is nothing to display or set up
+    (assoc db :graphics (graphics/setup-context canvas map-data)))))
+
+(re-frame/reg-event-fx
+ :canvas-loaded
+ (fn [{{map-data :map-data :as db} :db} [_ canvas]]
+   {:db (assoc-in db [:graphics :canvas] canvas)
+    :dispatch [::setup-graphics [canvas map-data]]}))
+
+(re-frame/reg-event-fx
+ ::load-model
+ (fn [{{{canvas :canvas} :graphics :as db} :db} [_ map-data]]
+   {:db (assoc db :map-data map-data)
+    :dispatch [::setup-graphics [canvas map-data]]}))
+
+;; Fetch models
+(defn get-model
+  [uri]
+  (let [xhr (js/XMLHttpRequest.)]
+    (set! (.-responseType xhr) "text")
+    (set! (.-onload xhr)
+          (fn [e]
+            (if-let [buf (.-response xhr)]
+              (re-frame/dispatch [::load-model (cljs.reader/read-string buf)])
+              (prn "error loading model:" (.toString e)))))
+    (doto xhr
+      (.open "GET" uri true)
+      (.send))))
+
+(re-frame/reg-event-fx
+ ::get-model
+ (fn [db [_ url]] (get-model url) nil))
