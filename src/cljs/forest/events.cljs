@@ -3,6 +3,9 @@
    [re-frame.core :as re-frame]
    [forest.db :as db]
    [forest.graphics.webgl :as graphics]
+
+   [thi.ng.geom.gl.core :as gl]
+   [thi.ng.geom.gl.webgl.constants :as glc]
    ))
 
 (re-frame/reg-event-db
@@ -25,15 +28,17 @@
                   \s [0 0 -1]
                   \a [-1 0 0]
                   \d [1 0 0]}]
-     (update-in db [:graphics :camera]
-                graphics/update-view
-                (offsets key-code [0 0 0]) 0 0))))
+     (-> db
+         (update-in [:graphics :state] graphics/set-environment-values (:map-data db))
+         (update-in [:graphics :camera]
+                    graphics/update-view
+                    (offsets key-code [0 0 0]) 0 0)))))
 
 
 ;; Drawing
 (re-frame/reg-event-fx
  ::draw!
- (fn [{{{:keys [gl-ctx state camera]} :graphics} :db} [_ a]]
+ (fn [{{{:keys [gl-ctx camera state]} :graphics} :db} [_ a]]
    (when state
      (graphics/draw-frame! gl-ctx camera state))
    nil))

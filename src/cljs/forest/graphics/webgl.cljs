@@ -1,9 +1,12 @@
 (ns forest.graphics.webgl
-  (:require [thi.ng.geom.core :as geom]
+  (:require [thi.ng.color.core :as col]
+            [thi.ng.geom.core :as geom]
             [thi.ng.geom.quaternion :as q]
             [thi.ng.geom.matrix :as mat]
             [thi.ng.math.core :as m]
             [thi.ng.geom.mesh.io :as mio]
+            [thi.ng.geom.plane :as plane]
+            [thi.ng.typedarrays.core :as ta]
 
             [thi.ng.geom.gl.core :as gl]
             [thi.ng.geom.gl.camera :as cam]
@@ -58,27 +61,48 @@
        (partition 3)))
 
 
-(defn make-model [map-data]
+(defn water-array
+  "Get a Float32Array of all water levels associated with the appropriate vertices as sent to the shaders."
+  [map-data]
+  (->> map-data
+       points-2d-vertices
+       (apply concat)
+       (map (fn [[x y]] (-> map-data (nth y) (nth x) :w)))
+       (js/Float32Array.)))
+
+(defn add-env-buffers
+  "Add environment specific (e.g. water or pH levels) shader buffers."
+  [state map-data]
+  (update state :attribs merge
+          {:water {:data (water-array map-data) :size 1}}))
+
+(defn make-model
+  "Make an OpenGL model on the basis of the given map data."
+  [map-data]
+  ;; TODO: Make this work a lot faster. It currently takes ages to load anything
+  ;; largish. The fact that the face points get calculated a few times certainly
+  ;; doesn't help...
   (let [faces (height-map-points map-data 50)
+        max-height (->> map-data (map (comp :h second)) (apply max))
         mesh (glmesh/gl-mesh (* 3 (count faces)))]
     (doseq [[id face] (map-indexed vector faces)]
       (geom/add-face mesh (attr/generate-face-attribs face id {} {})))
-    mesh))
-
+    (-> mesh
+        (gl/as-gl-buffer-spec {})
+        (add-env-buffers map-data)
+        (assoc :maxHeight max-height))))
 
 (defn combine-model-shader
   [gl-ctx model shader]
   (-> model
-      (gl/as-gl-buffer-spec {})
       (assoc :shader ((:apply-model shader) shader model))
       (gl/make-buffers-in-spec gl-ctx glc/static-draw)))
 
 (defn draw-frame!
-  [gl-ctx camera model]
+  [gl-ctx camera state]
   (doto gl-ctx
     (gl/clear-color-and-depth-buffer 0 0 0 1 1)
-    (gl/draw-with-shader (cam/apply model camera))))
-
+    (gl/draw-with-shader (cam/apply state camera))))
 
 (defn setup-context [canvas map-data]
   (let [gl-ctx (gl/gl-context canvas)
@@ -100,3 +124,11 @@
      :shaders shaders
      :state (combine-model-shader gl-ctx model (:height shaders))
      }))
+
+
+(defn set-environment-values [{attribs :attribs :as state} map-data]
+  ;; TODO: Update environment values. Currently water points are set once
+  ;; while creating the model. This is quite suboptimal, as it means that
+  ;; water levels won't change over time. Water is a nice example as it
+  ;; should be quite dynamic, as opposed to e.g. pH levels or something.
+  state)
