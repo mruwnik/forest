@@ -6,15 +6,10 @@
    ))
 
 (defn view-port
-  ([] (view-port {:id "canvas" :width "1280" :height "960" :tabIndex "1"}))
+  ([] (view-port {:id "canvas-container" :width "1280" :height "960" :tabIndex "1"}))
   ([props]
-   [:canvas
-    (merge
-     {:ref #(dispatch [:canvas-loaded %])
-      :on-mouse-move #(dispatch [:mouse-move [(.-movementX %) (.-movementY %)]])
-      :on-key-down #(dispatch [:key-pressed (.-key %)])
-      }
-     props)]))
+   [:div
+    (assoc props :ref #(dispatch [:canvas-loaded %]))]))
 
 (defn main-panel []
   (let [name (re-frame/subscribe [::subs/name])]

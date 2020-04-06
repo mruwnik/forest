@@ -5,7 +5,9 @@
                                org.clojure/google-closure-library
                                org.clojure/google-closure-library-third-party]]
                  [thheller/shadow-cljs "2.8.83"]
-                 [thi.ng/geom "1.0.0-RC4"]
+                 ;; [thi.ng/geom "1.0.0-RC4"]
+                 [cljsjs/p5 "0.9.0-0"]
+                 [quil "3.1.0"]
                  [reagent "0.9.1"]
                  [re-frame "0.11.0"]]
 

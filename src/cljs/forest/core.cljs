@@ -20,5 +20,4 @@
 (defn init []
   (re-frame/dispatch-sync [::events/initialize-db])
   (dev-setup)
-  (mount-root)
-  (re-frame/dispatch-sync [::events/get-model "bialawieza.edn"]))
+  (mount-root))
