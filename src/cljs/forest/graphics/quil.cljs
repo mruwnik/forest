@@ -2,7 +2,9 @@
   (:require [quil.core :as q]
             [quil.middleware :as m]
             [re-frame.core :as re-frame]
-            [forest.subs :as subs]))
+            [forest.subs :as subs]
+            [forest.graphics.textures :as tex :refer [coverage-granularity texture-pixels-per-square]]
+            ))
 
 ;; FIXME: The current way is pretty much backwards - sending all the vertices
 ;; takes ages, so there are now 3 mechanisms - the render loop (handled by quil),
@@ -17,44 +19,29 @@
 ;; bushes can be rendered seperately from the ground cover, as there will be a lot
 ;; less of 'em and a simple stick and ball should do for now
 
-(defn points-2d-vertices [n m]
-  (for [y (range m)
-        x (range n)]
-    [[x y] [x (inc y)] [(inc x) y]
-     [(inc x) y]
-     [(inc x) (inc y)]
-     [x (inc y)]]))
-
-(defn draw-triangles
-  "Renders the whole grid using the given colour function.
+(defn draw-world
+  "Renders the whole grid using layer specific colour functions.
 
   The idea is for various layers (e.g. water, daisies) to be able to use different renderers."
-  [{:keys [grid texture-points texture pixels-per-square]} colour-func]
-  (q/with-graphics texture
-    (q/begin-shape :triangles)
-    (doseq [[x y] texture-points]
-      (colour-func grid x y)
-      (q/vertex (* x pixels-per-square) (* y pixels-per-square) 0))
-    (q/end-shape)))
+  [{:keys [grid grid-canvas pixels-per-square textures] :as state}]
+  (q/with-graphics grid-canvas (q/background 116 102 59))
 
-(defn draw-ground [state]
-  (draw-triangles state
-                  (fn [grid x y]
-                    (q/stroke (* x 2) (* 2 y) 150)
-                    (q/fill (* x 2) (* 2 y) 150)))
-  state)
+  (doseq [plant [:grass :daisies]]
+    (tex/draw-plant-texture grid grid-canvas (textures plant) plant)))
 
-(defn setup []
-  "Set initial state for graphics."
+(defn setup
+  "Set initial state for graphics.
+
+  This will also load all plant specific textures - which can take a while."
+  []
   (let [grid @(re-frame/subscribe [::subs/world])
-        n (dec (count (first grid)))
-        m (dec (count grid))]
-    {:pixels-per-square 20
-     :texture (q/create-graphics (* 20 n) (* 20 m))  ; this should contain the rendered forest
-     :texture-points (->> (points-2d-vertices n m)   ; all coords used by the texture
-                          (apply concat)
-                          (into []))}))
-
+        n (* texture-pixels-per-square (dec (count (first grid))))
+        m (* texture-pixels-per-square (dec (count grid)))]
+    {:grid-canvas (q/create-graphics n m :p3d)  ; this should contain the rendered forest
+     :textures {:water nil
+                :daisies (tex/make-flowers-texture 5 [255 255 255] [255 155 0])
+                :grass (tex/make-flowers-texture 1 [0 255 0])
+                }}))
 
 (defn update-world
   "Update the graphics state.
@@ -64,10 +51,16 @@
   (let [grid @(re-frame/subscribe [::subs/world])]
     (if (= prev-grid grid)
       state
-      (-> state (assoc :grid grid) draw-ground))))
+      (let [state (assoc state :grid grid)]
+        (draw-world state)
+        state))))
 
+(defn draw
+  "Draw the world.
 
-(defn draw [{world :world ground :texture :as state}]
+  Coz it's slow, the current state is rendered to a texture elsewhere - this simply
+  displays it on a rectangle. This allows moving around to work relatively fluidly."
+  [{world :world ground :grid-canvas :as state}]
   (q/background 255)
   (q/lights)
   (q/fill 150 100 150)
@@ -75,10 +68,8 @@
   (when ground
     (q/begin-shape)
     (q/texture ground)
-    (q/plane 600 600)
-    (q/end-shape :close)
-    )
-  )
+    (q/rect 0 0 600 600)
+    (q/end-shape :close)))
 
 (defn start-drawing [canvas-id]
   (q/sketch

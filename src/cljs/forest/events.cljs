@@ -14,27 +14,8 @@
  :canvas-loaded
  (fn [db [_ canvas]]
    (merge db {:graphics {:sketch (q/start-drawing "canvas-container")}
-              :world {:n 100 :m 100
-                      :grid (for [y (range 100)]
-                              (for [x (range 100)]
-                                {:water 0 :plants {}}))}})))
-
-;; (re-frame/reg-event-fx
-;;  ::load-model
-;;  (fn [{{{canvas :canvas} :graphics :as db} :db} [_ map-data]]
-;;    {:db (assoc db :map-data map-data)
-;;     :dispatch [::setup-graphics [canvas map-data]]}))
-
-(when nil
-  (do
-    (re-frame/reg-event-fx
-     ::debugger
-     (fn [{{map-data :map-data {:keys [model canvas gl-ctx shaders state]} :graphics :as db} :db} [_ e]]
-       (println "asd")
-       ;; (println (-> state :attribs :position :data (.-length))
-       ;; (println (.getAttributeLocation gl-ctx (-> shaders :height :program) "colour"))
-       ;; (println (gl/make-array-buffer gl-ctx glc/array-buffer glc/dynamic-draw nil))
-       ))
-    (re-frame/dispatch [::debugger "asdad"])
-    )
-  )
+              ;; set the world staticlly for now, until the graphics work properly
+              :world {:grid (for [y (range 20)]
+                              (for [x (range 20)]
+                                {:water (rand-int 255)
+                                 :plants {:grass (rand-int 100) :daisies (rand-int 99)}}))}})))
